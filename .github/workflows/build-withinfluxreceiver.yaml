@@ -1,0 +1,72 @@
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        default: '0.142.0'
+        type: string
+        description: based on otelcol version
+
+jobs:
+  otel-custom:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - uses: actions/setup-go@v6
+      with:
+        go-version: stable
+    - name: Get current date
+      id: id
+      run: |
+         sec=$( date -d "1970-01-01 UTC $(date +%T)" +%s )
+         echo "id=$(date +'%Y-%m-%d')-$sec" >> "$GITHUB_OUTPUT"
+    - run: |
+        set -ex
+        # get otel build tool
+        curl --proto =https -fL -o ocb \
+        https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/cmd%2Fbuilder%2Fv${{inputs.version}}/ocb_${{inputs.version}}_linux_amd64
+        chmod +x ocb
+
+        # get manifest of standard otelcol
+        curl --proto =https -fL -o manifest.yaml \
+        https://raw.githubusercontent.com/open-telemetry/opentelemetry-collector-releases/refs/tags/v${{inputs.version}}/distributions/otelcol/manifest.yaml
+
+        python -V
+
+        export OTELV=${{ inputs.version }}
+        pip install PyYAML
+
+        # Patch manifest.yaml
+        python -c '
+        import yaml
+        import os
+        manifest = yaml.safe_load(open("manifest.yaml"))
+        otelv = os.environ["OTELV"]
+
+        has_influx_receiver = 0
+        # check if influxdbreceiver is there
+        for r in manifest["receivers"]:
+            if "influxdbreceiver" in r["gomod"]:
+              has_influx_receiver = 1
+
+        if not has_influx_receiver:
+            manifest["receivers"].append({
+              "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/influxdbreceiver v{ otelv }"
+            })
+
+        with open("manifest.yaml", "w") as f:
+          f.write(yaml.dump(manifest))
+        '
+
+        cat manifest.yaml
+    - run: |
+        ./ocb --config manifest.yaml
+    - uses: actions/upload-artifact@v6
+      with:
+        name: otelcol-${{ inputs.version }}-${{ steps.id.outputs.id }}
+        path: "_build/otelcol"
+        if-no-files-found: error
