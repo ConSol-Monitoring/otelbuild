@@ -19,12 +19,13 @@ jobs:
     - uses: actions/setup-go@v6
       with:
         go-version: stable
-    - name: Get current date
+    - name: set artifact id
       id: id
       run: |
          sec=$( date -d "1970-01-01 UTC $(date +%T)" +%s )
          echo "id=$(date +'%Y-%m-%d')-$sec" >> "$GITHUB_OUTPUT"
-    - run: |
+    - name: setup build tool
+      run: |
         set -ex
         # get otel build tool
         curl --proto =https -fL -o ocb \
@@ -39,6 +40,7 @@ jobs:
 
         export OTELV=${{ inputs.version }}
         pip install PyYAML
+        apt update && apt install upx
 
         # Patch manifest.yaml
         python -c '
@@ -63,8 +65,11 @@ jobs:
         '
 
         cat manifest.yaml
-    - run: |
+    - name: build
+      run: |
+        set -ex
         ./ocb --config manifest.yaml
+        upx _build/otelcol
     - uses: actions/upload-artifact@v6
       with:
         name: otelcol-${{ inputs.version }}-${{ steps.id.outputs.id }}
