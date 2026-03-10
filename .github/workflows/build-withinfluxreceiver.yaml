@@ -44,24 +44,31 @@ jobs:
 
         # Patch manifest.yaml
         python -c '
-        import yaml
-        import os
-        manifest = yaml.safe_load(open("manifest.yaml"))
-        otelv = os.environ["OTELV"]
+            import yaml
+            import os
 
-        has_influx_receiver = 0
-        # check if influxdbreceiver is there
-        for r in manifest["receivers"]:
-            if "influxdbreceiver" in r["gomod"]:
-              has_influx_receiver = 1
+            otel_version = os.environ.get("OTELV")
+            if not otel_version:
+                raise RuntimeError("Environment variable 'OTELV' is required but not set.")
 
-        if not has_influx_receiver:
-            manifest["receivers"].append({
-              "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/influxdbreceiver v{ otelv }"
-            })
+            manifest_path = "manifest.yaml"
 
-        with open("manifest.yaml", "w") as f:
-          f.write(yaml.dump(manifest))
+            with open(manifest_path, "r") as f:
+                manifest = yaml.safe_load(f) or {}
+
+            receivers = manifest.setdefault("receivers", [])
+            required_receivers = ["influxdbreceiver", "filelogreceiver"]
+
+            for name in required_receivers:
+                exists = any(name in r.get("gomod", "") for r in receivers)
+                
+                if not exists:
+                    receivers.append({
+                        "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/{name} v{otel_version}"
+                    })
+
+            with open(manifest_path, "w") as f:
+                yaml.dump(manifest, f, default_flow_style=False)
         '
 
         cat manifest.yaml
