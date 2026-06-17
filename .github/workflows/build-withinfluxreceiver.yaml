@@ -57,7 +57,9 @@ jobs:
             manifest = yaml.safe_load(f) or {}
 
         receivers = manifest.setdefault("receivers", [])
+        connectors = manifest.setdefault("connectors", [])
         required_receivers = ["influxdbreceiver", "filelogreceiver"]
+        required_connectors = ["routing"]
 
         for name in required_receivers:
             exists = any(name in r.get("gomod", "") for r in receivers)
@@ -65,6 +67,14 @@ jobs:
             if not exists:
                 receivers.append({
                     "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/{name} v{otel_version}"
+                })
+
+        for name in required_connectors:
+            exists = any(name in c.get("gomod", "") for c in connectors)
+
+            if not exists:
+                connectors.append({
+                    "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/connector/{name}connector v{otel_version}"
                 })
 
         with open(manifest_path, "w") as f:
