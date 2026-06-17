@@ -3,7 +3,7 @@ on:
     inputs:
       version:
         required: true
-        default: '0.142.0'
+        default: '0.154.0'
         type: string
         description: based on otelcol version
 
