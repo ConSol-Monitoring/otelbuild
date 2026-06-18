@@ -56,26 +56,29 @@ jobs:
         with open(manifest_path, "r") as f:
             manifest = yaml.safe_load(f) or {}
 
+        def ensure_component(items, gomod):
+            if not any(entry.get("gomod") == gomod for entry in items):
+                items.append({"gomod": gomod})
+
         receivers = manifest.setdefault("receivers", [])
         connectors = manifest.setdefault("connectors", [])
-        required_receivers = ["influxdbreceiver", "filelogreceiver"]
-        required_connectors = ["routing"]
-
-        for name in required_receivers:
-            exists = any(name in r.get("gomod", "") for r in receivers)
-            
-            if not exists:
-                receivers.append({
-                    "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/{name} v{otel_version}"
-                })
-
-        for name in required_connectors:
-            exists = any(name in c.get("gomod", "") for c in connectors)
-
-            if not exists:
-                connectors.append({
-                    "gomod": f"github.com/open-telemetry/opentelemetry-collector-contrib/connector/{name}connector v{otel_version}"
-                })
+        extensions = manifest.setdefault("extensions", [])
+        ensure_component(
+            receivers,
+            f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/influxdbreceiver v{otel_version}",
+        )
+        ensure_component(
+            receivers,
+            f"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v{otel_version}",
+        )
+        ensure_component(
+            connectors,
+            f"github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v{otel_version}",
+        )
+        ensure_component(
+            extensions,
+            f"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v{otel_version}",
+        )
 
         with open(manifest_path, "w") as f:
             yaml.dump(manifest, f, default_flow_style=False)
